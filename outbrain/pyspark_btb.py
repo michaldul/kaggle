@@ -2,7 +2,7 @@
 from pyspark import SparkContext
 from operator import add
 
-sc = SparkContext("local", "Outbrain BTB")
+sc = SparkContext("local[8]", "Outbrain BTB")
 
 TEST_CSV = 'c:\\dev\\kaggle\\outbrain\\data\\clicks_test.csv'
 TRAIN_CSV = 'c:\\dev\\kaggle\\outbrain\\data\\clicks_train.csv'
