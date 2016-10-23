@@ -1,12 +1,12 @@
-
+    
 from pyspark import SparkContext
 from operator import add
 
-sc = SparkContext("local[8]", "Outbrain BTB")
+sc = SparkContext(appName="Outbrain BTB")
 
-TEST_CSV = 'c:\\dev\\kaggle\\outbrain\\data\\clicks_test.csv'
-TRAIN_CSV = 'c:\\dev\\kaggle\\outbrain\\data\\clicks_train.csv'
-OUTPUT_CSV = 'c:\\dev\\kaggle\\outbrain\\data\\spark_output'
+TEST_CSV = 's3n://michaldul/kaggle-outbrain/clicks_test.csv'
+TRAIN_CSV = 's3n://michaldul/kaggle-outbrain/clicks_train.csv'
+OUTPUT_CSV = 's3n://michaldul/kaggle-outbrain/output.csv'
 
 clicks_train = sc.textFile(TRAIN_CSV) \
     .filter(lambda line: line[0] != 'd') \
@@ -31,3 +31,4 @@ clicks_test = sc.textFile(TEST_CSV) \
     .aggregateByKey([], lambda t, r: t + [r], lambda a, b: a + b) \
     .map(lambda row: "{0},{1}".format(row[0], sorted_by_prob(row[1]))) \
     .saveAsTextFile(OUTPUT_CSV)
+
