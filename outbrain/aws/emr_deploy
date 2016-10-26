@@ -1,0 +1,3 @@
+aws emr create-cluster --release-label emr-5.0.0 --applications Name=Spark --ec2-attributes KeyName=key --log-uri s3://logs-pyspark/ --instance-type c3.xlarge --instance-count 4 --use-default-roles 
+
+aws emr add-steps --cluster-id j-XXXXXXX --steps Type=spark,Name=OutbrainBenchmark,Args=[--deploy-mode,cluster,--master,yarn,--conf,spark.yarn.submit.waitAppCompletion=false,s3://michaldul/kaggle-outbrain/pyspark_btb.py],ActionOnFailure=TERMINATE_CLUSTER
