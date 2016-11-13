@@ -1,8 +1,26 @@
 import numpy as np
 import pandas as pd
 
-# Is access information for landing page of ad click in page_views.csv?
-df_test = pd.read_csv('./input/clicks_test.csv')
+eval = True
+
+
+# following code is  based on clustifier's BTB scripts
+train = pd.read_csv("./input/clicks_train.csv")
+
+if eval:
+    ids = train.display_id.unique()
+    ids = np.random.choice(ids, size=len(ids) // 4, replace=False)
+
+    df_test = train[train.display_id.isin(ids)]
+    y = df_test[df_test.clicked == 1].ad_id.values
+    y = [[_] for _ in y]
+
+    del df_test['clicked']
+
+    train = train[~train.display_id.isin(ids)]
+else:
+    # Is access information for landing page of ad click in page_views.csv?
+    df_test = pd.read_csv('./input/clicks_test.csv')
 
 df_ad = pd.read_csv('./input/promoted_content.csv',
                     usecols=('ad_id', 'document_id'),
@@ -18,6 +36,8 @@ df_test = pd.merge(df_test, df_events, on='display_id', how='left')
 
 df_test['usr_doc'] = df_test['uuid'] + '_' + df_test['document_id']
 
+# promoted_dict = df_test.groupby('usr_doc').timestamp.apply(list).to_dict()
+
 df_test = df_test.set_index('usr_doc')
 
 time_dict = df_test[['timestamp']].to_dict()['timestamp'] # user_doc: timestamp
@@ -28,6 +48,8 @@ head_arr = line.split(",")
 fld_index = dict(zip(head_arr, range(0, len(head_arr))))
 total = 0
 found = 0
+
+# promoted_and_seen = {}
 
 while 1:
     line = f.readline().strip()
@@ -42,16 +64,25 @@ while 1:
         # don't use timestamp yet.
         # time_diff = time_dict[usr_doc] - int(arr[fld_index['timestamp']])
         # if abs(time_diff) < 600:
+
+        # if usr_doc in promoted_and_seen:
+        #     promoted_and_seen[usr_doc]['visited'].append(int(arr[fld_index['timestamp']]))
+        # else:
+        #     promoted_and_seen[usr_doc] = {'promoted': promoted_dict[usr_doc], 'visited': [int(arr[fld_index['timestamp']])]}
+
         time_dict[usr_doc] = -1
         found += 1
+
 print(found)
 # found (total access found in page_views.csv) would be 271994
+
+# delays = list(map(lambda kv: kv[1]['visited'][0] - kv[1]['promoted'][0], filter(lambda kv: len(kv[1]['promoted']) == 1 and len(kv[1]['visited']) == 1, promoted_and_seen.items()))
+# delays = np.array(delay
+# sns.distplot(np.array(delays[10000:-10000])/1000)
 
 df_test = df_test.reset_index()
 df_test['fixed_timestamp'] = df_test['usr_doc'].apply(lambda x: time_dict[x])
 
-# following code is  based on clustifier's BTB scripts
-train = pd.read_csv("./input/clicks_train.csv")
 cnt = train[train.clicked == 1].ad_id.value_counts()
 cntall = train.ad_id.value_counts()
 ave_ctr = np.sum(cnt) / float(np.sum(cntall))
@@ -79,11 +110,19 @@ def agg2arr(x):
 def val_sort(x):
     id_dict = dict(zip(x[0], x[1]))
     id_list_sorted = [k for k, v in sorted(id_dict.items(), key=lambda x: x[1], reverse=True)]
-    return " ".join(map(str, id_list_sorted))
+    return id_list_sorted
+    # return " ".join(map(str, id_list_sorted))
 
 
 df_test['prob'] = df_test[['fixed_timestamp', 'ad_id']].apply(lambda x: get_prob(x), axis=1)
 subm = df_test.groupby("display_id").agg({'ad_id': agg2arr, 'prob': agg2arr})
-subm['ad_id'] = subm[['ad_id', 'prob']].apply(lambda x: val_sort(x), axis=1)
-del subm['prob']
-subm.to_csv("subm_leak.csv")
+
+if eval:
+    from ml_metrics import mapk
+
+    predictions = subm[['ad_id', 'prob']].apply(lambda x: val_sort(x), axis=1)
+    print(mapk(y, predictions.values, k=12))
+else:
+    subm['ad_id'] = subm[['ad_id', 'prob']].apply(lambda x: val_sort(x), axis=1)
+    del subm['prob']
+    subm.to_csv("subm_leak.csv")
