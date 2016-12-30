@@ -1,8 +1,26 @@
 import numpy as np
 import pandas as pd
 
-# Is access information for landing page of ad click in page_views.csv?
-df_test = pd.read_csv('./input/clicks_test.csv')
+eval = False
+
+
+# following code is  based on clustifier's BTB scripts
+train = pd.read_csv("./input/clicks_train.csv")
+
+if eval:
+    ids = train.display_id.unique()
+    ids = np.random.choice(ids, size=len(ids) // 4, replace=False)
+
+    df_test = train[train.display_id.isin(ids)]
+    y = df_test[df_test.clicked == 1].ad_id.values
+    y = [[_] for _ in y]
+
+    del df_test['clicked']
+
+    train = train[~train.display_id.isin(ids)]
+else:
+    # Is access information for landing page of ad click in page_views.csv?
+    df_test = pd.read_csv('./input/clicks_test.csv')
 
 df_ad = pd.read_csv('./input/promoted_content.csv',
                     usecols=('ad_id', 'document_id'),
@@ -18,9 +36,9 @@ df_test = pd.merge(df_test, df_events, on='display_id', how='left')
 
 df_test['usr_doc'] = df_test['uuid'] + '_' + df_test['document_id']
 
-df_test = df_test.set_index('usr_doc')
+promoted_dict = df_test.groupby('usr_doc')['timestamp'].apply(list)
 
-time_dict = df_test[['timestamp']].to_dict()['timestamp'] # user_doc: timestamp
+views_dict = {}  # add train/test as well?
 
 f = open("./input/page_views.csv", "r")
 line = f.readline().strip()
@@ -38,20 +56,61 @@ while 1:
         break
     arr = line.split(",")
     usr_doc = arr[fld_index['uuid']] + '_' + arr[fld_index['document_id']]
-    if usr_doc in time_dict:
+    if usr_doc in promoted_dict:
+
+        if usr_doc not in views_dict:
+            views_dict[usr_doc] = []
+        views_dict[usr_doc].append(int(arr[fld_index['timestamp']]))
+
         # don't use timestamp yet.
         # time_diff = time_dict[usr_doc] - int(arr[fld_index['timestamp']])
         # if abs(time_diff) < 600:
-        time_dict[usr_doc] = -1
+
+        # promoted_dict[usr_doc] = -1
         found += 1
+
 print(found)
 # found (total access found in page_views.csv) would be 271994
 
-df_test = df_test.reset_index()
-df_test['fixed_timestamp'] = df_test['usr_doc'].apply(lambda x: time_dict[x])
+promoted_views = dict(
+    [(usr_doc, {'promoted': promoted_dict[usr_doc], 'visited': views})
+     for usr_doc, views in views_dict.items()])
 
-# following code is  based on clustifier's BTB scripts
-train = pd.read_csv("./input/clicks_train.csv")
+
+PROMOTED_TRESHOLD = 3600000
+
+def get_succ_promoted(promoted_visited_dict):
+    result = {}
+    for usr_doc in promoted_visited_dict:
+        result[usr_doc] = []
+        promoted = promoted_visited_dict[usr_doc]['promoted']
+        visited = promoted_visited_dict[usr_doc]['visited']
+        v_idx = 0
+        for p in promoted:
+            while v_idx < len(visited):
+                if p < visited[v_idx] < (p + PROMOTED_TRESHOLD):
+                    result[usr_doc].append(visited[v_idx])
+                    v_idx += 1
+                    break
+                v_idx += 1
+
+    return result
+
+
+assert get_succ_promoted({'a': {'promoted': [100], 'visited': [200]}}) == {'a': [200]}
+assert get_succ_promoted({'a': {'promoted': [], 'visited': [200]}}) == {'a': []}
+assert get_succ_promoted({'a': {'promoted': [100], 'visited': []}}) == {'a': []}
+assert get_succ_promoted({'a': {'promoted': [100, 110], 'visited': [80, 120]}}) == {'a': [120]}
+assert get_succ_promoted({'a': {'promoted': [1000, 3000], 'visited': [10000, 30000]}}) == {'a': [10000, 30000]}
+
+succs_promotions = get_succ_promoted(promoted_views)
+
+df_test = df_test.reset_index()
+df_test['fixed_timestamp'] = \
+    df_test[['usr_doc', 'timestamp']].apply(lambda x:
+                                            -1 if (x[0] in succs_promotions and x[1] in succs_promotions[x[0]]) else 1,
+                                            axis=1)
+
 cnt = train[train.clicked == 1].ad_id.value_counts()
 cntall = train.ad_id.value_counts()
 ave_ctr = np.sum(cnt) / float(np.sum(cntall))
@@ -84,6 +143,13 @@ def val_sort(x):
 
 df_test['prob'] = df_test[['fixed_timestamp', 'ad_id']].apply(lambda x: get_prob(x), axis=1)
 subm = df_test.groupby("display_id").agg({'ad_id': agg2arr, 'prob': agg2arr})
-subm['ad_id'] = subm[['ad_id', 'prob']].apply(lambda x: val_sort(x), axis=1)
-del subm['prob']
-subm.to_csv("subm_leak.csv")
+
+if eval:
+    from ml_metrics import mapk
+
+    predictions = subm[['ad_id', 'prob']].apply(lambda x: val_sort(x), axis=1)
+    print(mapk(y, predictions.values, k=12))
+else:
+    subm['ad_id'] = subm[['ad_id', 'prob']].apply(lambda x: val_sort(x), axis=1)
+    del subm['prob']
+    subm.to_csv("subm_leak.csv")
