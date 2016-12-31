@@ -22,11 +22,30 @@ test_df = spark.sql(
         left join events
             on clicks_test.display_id = events.display_id""")
 
-promoted_times = test_df.groupby('usr_target').agg(F.collect_list('timestamp'))
+test_df.groupby('usr_target').agg(F.collect_list('timestamp')).createOrReplaceTempView('promoted_times')
 
-promoted_times.createOrReplaceTempView('promoted_times')
+spark.sql("""select distinct promoted_times.usr_target
+    from promoted_times INNER JOIN page_views_sample
+    on promoted_times.usr_target = CONCAT(page_views_sample.uuid, '_', page_views_sample.document_id) """)\
+    .createOrReplaceTempView('clicked')
 
-clicked = spark.sql("""select distinct promoted_times.usr_target from promoted_times INNER JOIN page_views_sample
-    on promoted_times.usr_target = CONCAT(events.uuid, '_', promoted_content.document_id) """)
 
-average_ctr = spark.sql("""select ad_id, count(clicked=1) as a, count(clicked==0) as a2, count(*) as b, count(clicked=1)/count(*) as avg_ctr from clicks_train group by ad_id""")
+spark.sql("""select ad_id, SUM(clicked)/(count(*) + 10) as avg_ctr
+        from clicks_train
+        group by ad_id""").createOrReplaceTempView('average_ctr')
+
+
+test_prob = spark.sql("""select clicks_test.display_id, clicks_test.ad_id,
+            CASE WHEN clicked.usr_target IS NULL THEN COALESCE (average_ctr.avg_ctr, 0) ELSE 1 END AS prob
+            from clicks_test
+            join events on clicks_test.display_id = events.display_id
+
+            left join clicked on clicked.usr_target = CONCAT(events.uuid, '_', events.document_id)
+            left join average_ctr on clicks_test.ad_id = average_ctr.ad_id""")
+
+
+test_prob.rdd \
+    .map(lambda row: (row.display_id, (row.ad_id, row.prob)))\
+    .groupByKey()\
+    .map(lambda (k, v): (k, ' '.join([p[0] for p in sorted(v, key=lambda p: p[1], reverse=True)])))\
+    .map(lambda (k, v): k + ',' + v).saveAsTextFile('gs://outbrain-input/sub.csv')
