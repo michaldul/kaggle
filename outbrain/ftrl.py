@@ -35,9 +35,9 @@ D = 2 ** 20  # number of weights to use
 interaction = False  # whether to enable poly2 feature interactions
 
 # D, training/validation
-epoch = 5  # learn training data for N passes
+epoch = 10  # learn training data for N passes
 holdafter = None  # data after date N (exclusive) are used as validation
-holdout = None  # use every N training instance for holdout validation
+holdout = 6  # use every N training instance for holdout validation
 
 
 ##############################################################################
@@ -286,7 +286,10 @@ with open(data_path + "events.csv") as infile:
             tlist.extend(loc[:] + ['', ''])
         else:
             tlist.append(['', '', ''])
-        event_dict[int(row[0])] = tlist[:]
+        try:
+            event_dict[int(row[0])] = tlist[:]
+        except:
+            print(len(event_dict))
         if ind % 100000 == 0:
             print("Events : ", ind)
     print(len(event_dict))
@@ -294,23 +297,28 @@ del events
 
 print("Leakage file..")
 leak_uuid_dict = {}
-with open(data_path+"leak_uuid_doc.csv") as infile:
-	doc = csv.reader(infile)
-	next(doc)
-	leak_uuid_dict = {}
-	for ind, row in enumerate(doc):
-		doc_id = int(row[0])
-		leak_uuid_dict[doc_id] = set(row[1].split(' '))
-		if ind%100000==0:
-			print("Leakage file : ", ind)
-	print(len(leak_uuid_dict))
+with open(data_path + "leak_uuid_doc.csv") as infile:
+    doc = csv.reader(infile)
+    next(doc)
+    leak_uuid_dict = {}
+    for ind, row in enumerate(doc):
+        doc_id = int(row[0])
+        leak_uuid_dict[doc_id] = set(row[1].split(' '))
+        if ind % 100000 == 0:
+            print("Leakage file : ", ind)
+    print(len(leak_uuid_dict))
 del doc
+
+losses = {}
 
 # start training
 for e in range(epoch):
+    print("Epoch: ", e)
     loss = 0.
     count = 0
     date = 0
+
+    losses[e] = []
 
     for t, disp_id, ad_id, x, y in data(train, D):  # data is a generator
         #    t: just a instance counter
@@ -332,12 +340,13 @@ for e in range(epoch):
             #
             # holdout: validate with every N instance, train with others
             loss += logloss(p, y)
+            losses[e].append(logloss(p, y))
             count += 1
         else:
             # step 2-2, update learner with label (click) information
             learner.update(x, p, y)
 
-        if t % 1000000 == 0:
+        if t % 10000000 == 0:
             print("Processed : ", t, datetime.now())
 
 ##############################################################################
@@ -353,7 +362,7 @@ with open(submission, 'w') as outfile:
             print("Processed : ", t, datetime.now())
 
 
-# import pandas as pd
-# df = pd.read_csv('sub_proba.csv')
-# sub = df.groupby('display_id').apply(
-#     lambda display: ' '.join([str(ad) for ad in display.sort_values('clicked', ascending=False)['ad_id']]))
+            # import pandas as pd
+            # df = pd.read_csv('sub_proba.csv')
+            # sub = df.groupby('display_id').apply(
+            #     lambda display: ' '.join([str(ad) for ad in display.sort_values('clicked', ascending=False)['ad_id']]))
