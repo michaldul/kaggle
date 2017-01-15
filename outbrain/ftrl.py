@@ -19,25 +19,25 @@ csv.field_size_limit(1000000000)
 ##############################################################################
 
 # A, paths
-data_path = "input/"
-train = data_path + 'clicks_train.csv'  # path to training file
-test = data_path + 'clicks_test.csv'  # path to testing file
-submission = 'sub_proba.csv'  # path of to be outputted submission file
+data_path = "../../input/"
+train = data_path + 'clicks_train.csv' # path to training file
+test = data_path + 'clicks_test.csv' # path to testing file
+submission = 'sub_proba.csv' # path of to be outputted submission file
 
 # B, model
-alpha = .1  # learning rate
-beta = 0.  # smoothing parameter for adaptive learning rate
-L1 = 0.001  # L1 regularization, larger value means more regularized
-L2 = 0.001  # L2 regularization, larger value means more regularized
+alpha = .01 # learning rate
+beta = 0.01 # smoothing parameter for adaptive learning rate
+L1 = 0.001 # L1 regularization, larger value means more regularized
+L2 = 0.001 # L2 regularization, larger value means more regularized
 
 # C, feature/hash trick
-D = 2 ** 20  # number of weights to use
-interaction = False  # whether to enable poly2 feature interactions
+D = 2 ** 20 # number of weights to use
+interaction = False # whether to enable poly2 feature interactions
 
 # D, training/validation
-epoch = 10  # learn training data for N passes
-holdafter = None  # data after date N (exclusive) are used as validation
-holdout = 6  # use every N training instance for holdout validation
+epoch = 6 # learn training data for N passes
+holdafter = None # data after date N (exclusive) are used as validation
+holdout = None # use every N training instance for holdout validation
 
 
 ##############################################################################
@@ -290,7 +290,7 @@ with open(data_path + "events.csv") as infile:
             event_dict[int(row[0])] = tlist[:]
         except:
             print(len(event_dict))
-        if ind % 100000 == 0:
+        if ind % 1000000 == 0:
             print("Events : ", ind)
     print(len(event_dict))
 del events
@@ -348,6 +348,8 @@ for e in range(epoch):
 
         if t % 10000000 == 0:
             print("Processed : ", t, datetime.now())
+            if any(losses[e]):
+                print("mean logloss : ", sum(losses[e])/len(losses[e]))
 
 ##############################################################################
 # start testing, and build Kaggle's submission file ##########################
@@ -362,7 +364,27 @@ with open(submission, 'w') as outfile:
             print("Processed : ", t, datetime.now())
 
 
-            # import pandas as pd
-            # df = pd.read_csv('sub_proba.csv')
-            # sub = df.groupby('display_id').apply(
-            #     lambda display: ' '.join([str(ad) for ad in display.sort_values('clicked', ascending=False)['ad_id']]))
+# import pandas as pd
+# df = pd.read_csv('sub_proba.csv')
+# sub = df.groupby('display_id').apply(
+#     lambda display: ' '.join([str(ad) for ad in display.sort_values('clicked', ascending=False)['ad_id']]))
+
+
+# from csv import DictReader
+# with open('out.csv', 'w') as output:
+#     output.write('display_id,ad_id\n')
+#     with open('sub_proba.csv') as csv_file:
+#         rdr = DictReader(csv_file)
+#         row = next(rdr)
+#         current_dispaly = row['display_id']
+#         elements = [(row['ad_id'], row['clicked'])]
+#         for row in rdr:
+#             if row['display_id'] != current_dispaly:
+#                 sortd = ' '.join([str(e[0]) for e in sorted(elements, reverse=True, key=lambda x: x[1])])
+#                 output.write(current_dispaly + ',' + sortd + '\n')
+#                 current_dispaly = row['display_id']
+#                 elements = []
+#             elements.append((row['ad_id'], row['clicked']))
+#         sortd = ' '.join([str(e[0]) for e in sorted(elements, reverse=True, key=lambda x: x[1])])
+#         output.write(current_dispaly + ',' + sortd + '\n')
+
