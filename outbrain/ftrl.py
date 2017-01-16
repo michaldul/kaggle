@@ -23,12 +23,12 @@ csv.field_size_limit(1000000000)
 ##############################################################################
 
 # for test!
-# import pandas as pd                                                                       
-# df = pd.read_csv('input/clicks_train.csv')                                                
-# import numpy as np                                                                        
-# train_test = np.random.choice(df.display_id.unique(), len(df.display_id.unique())/5)      
-# df[df.display_id.isin(train_test)].to_csv('input/clicks_train_test.csv')                               
-# df[~df.display_id.isin(train_test)].to_csv('input/clicks_train_train.csv')                             
+# import pandas as pd
+# df = pd.read_csv('input/clicks_train.csv')
+# import numpy as np
+# train_test = np.random.choice(df.display_id.unique(), len(df.display_id.unique())/5)
+# df[df.display_id.isin(train_test)].to_csv('input/clicks_train_test.csv')
+# df[~df.display_id.isin(train_test)].to_csv('input/clicks_train_train.csv')
 
 # A, paths
 data_path = "input/"
@@ -230,6 +230,8 @@ def data(path, D):
             del row['clicked']
 
         x = []
+        del row['']
+        del row['display_id']
         for key in row:
             x.append(abs(hash(key + '_' + row[key])) % D)
 
@@ -240,6 +242,9 @@ def data(path, D):
             if ind == 0:
                 ad_doc_id = int(val)
             x.append(abs(hash(prcont_header[ind] + '_' + val)) % D)
+
+
+        row = doc_meta_dict[str(ad_doc_id)]
 
         row = event_dict.get(disp_id, [])
         ## build x
@@ -337,6 +342,25 @@ with open(data_path + "events.csv") as infile:
             print("Events : ", ind)
     print(len(event_dict))
 del events
+
+
+print("documents meta..")
+with open(data_path + "documents_meta.csv") as infile:
+    doc_meta = csv.DictReader(infile)
+    next(doc_meta)
+    doc_meta_dict = {}
+
+    for ind, row in enumerate(doc_meta):
+
+        # dodaj ify!
+        doc_meta_dict[row['document_id']] = {'source_id' :row['source_id'], 'publisher_id': row['publisher_id']}
+
+        if ind % 1000000 == 0:
+            print("documents meta : ", ind)
+    print(len(doc_meta_dict))
+
+
+
 
 print("Leakage file..")
 leak_uuid_dict = {}
@@ -437,4 +461,4 @@ with open(submission, 'w') as outfile:
 #             elements.append((row['ad_id'], row['clicked']))
 #         sortd = ' '.join([str(e[0]) for e in sorted(elements, reverse=True, key=lambda x: x[1])])
 #         output.write(current_dispaly + ',' + sortd + '\n')
-
+#
