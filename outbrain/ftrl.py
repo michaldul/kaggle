@@ -245,6 +245,8 @@ def data(path, D):
 
 
         row = doc_meta_dict[str(ad_doc_id)]
+        for v, k in row.items():
+            x.append(abs(hash(v + '_' + k)) % D)
 
         row = event_dict.get(disp_id, [])
         ## build x
@@ -352,8 +354,9 @@ with open(data_path + "documents_meta.csv") as infile:
 
     for ind, row in enumerate(doc_meta):
 
-        # dodaj ify!
-        doc_meta_dict[row['document_id']] = {'source_id' :row['source_id'], 'publisher_id': row['publisher_id']}
+        doc_meta_dict[row['document_id']] = {'source_id' :row['source_id']}
+        if 'publisher_id' in row:
+            doc_meta_dict[row['document_id']]['published_id'] = row['publisher_id']
 
         if ind % 1000000 == 0:
             print("documents meta : ", ind)
