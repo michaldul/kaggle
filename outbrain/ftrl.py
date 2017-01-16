@@ -8,6 +8,10 @@ from datetime import datetime
 from csv import DictReader
 from math import exp, log, sqrt
 
+import pandas as pd
+from ml_metrics import mapk
+import numpy as np
+
 csv.field_size_limit(1000000000)
 
 # TL; DR, the main training process starts on line: 250,
@@ -18,9 +22,18 @@ csv.field_size_limit(1000000000)
 # parameters #################################################################
 ##############################################################################
 
+# for test!
+# import pandas as pd                                                                       
+# df = pd.read_csv('input/clicks_train.csv')                                                
+# import numpy as np                                                                        
+# train_test = np.random.choice(df.display_id.unique(), len(df.display_id.unique())/5)      
+# df[df.display_id.isin(train_test)].to_csv('input/clicks_train_test.csv')                               
+# df[~df.display_id.isin(train_test)].to_csv('input/clicks_train_train.csv')                             
+
 # A, paths
-data_path = "../../input/"
-train = data_path + 'clicks_train.csv' # path to training file
+data_path = "input/"
+train = data_path + 'clicks_train_train.csv' # path to training file
+train_test = data_path + 'clicks_train_test.csv'
 test = data_path + 'clicks_test.csv' # path to testing file
 submission = 'sub_proba.csv' # path of to be outputted submission file
 
@@ -35,7 +48,7 @@ D = 2 ** 20 # number of weights to use
 interaction = False # whether to enable poly2 feature interactions
 
 # D, training/validation
-epoch = 6 # learn training data for N passes
+epoch = 10 # learn training data for N passes
 holdafter = None # data after date N (exclusive) are used as validation
 holdout = None # use every N training instance for holdout validation
 
@@ -246,6 +259,36 @@ def data(path, D):
         yield t, disp_id, ad_id, x, y
 
 
+
+
+def run_test():
+    test_disp_ids = []
+    test_ad_ids = []
+    test_preds = []
+    test_y = []
+    for t, disp_id, ad_id, x, y in data(train_test, D):
+        p = learner.predict(x)
+        test_disp_ids.append(disp_id)
+        test_ad_ids.append(ad_id)
+        test_preds.append(p)
+        test_y.append(y)
+    
+    preds = pd.DataFrame({'display_id': test_disp_ids, 'ad_id': test_ad_ids, 'clicked': test_y, 'pred': test_preds})
+    preds.sort_values(['display_id', 'pred'], inplace=True, ascending=[True, False] )
+
+    # Y_ads = preds[ preds.clicked == 1 ].ad_id.values.reshape(-1,1)
+    # P_ads = preds.groupby(by='display_id', sort=False).ad_id.apply( lambda x: x.values ).values
+
+    preds["seq"] = np.arange(preds.shape[0])
+    Y_seq           = preds[ preds.clicked == 1 ].seq.values
+    Y_first         = preds[['display_id', 'seq']].drop_duplicates(subset='display_id', keep='first').seq.values
+    Y_ranks         = Y_seq - Y_first
+    score           = np.mean( 1.0 / (1.0 + Y_ranks) )
+
+    return score
+
+
+
 ##############################################################################
 # start training #############################################################
 ##############################################################################
@@ -310,6 +353,7 @@ with open(data_path + "leak_uuid_doc.csv") as infile:
 del doc
 
 losses = {}
+scores = {}
 
 # start training
 for e in range(epoch):
@@ -319,6 +363,7 @@ for e in range(epoch):
     date = 0
 
     losses[e] = []
+    scores[e] = []
 
     for t, disp_id, ad_id, x, y in data(train, D):  # data is a generator
         #    t: just a instance counter
@@ -347,9 +392,14 @@ for e in range(epoch):
             learner.update(x, p, y)
 
         if t % 10000000 == 0:
-            print("Processed : ", t, datetime.now())
+            current_score = run_test()
+            scores[e].append(current_score)
+            print("Processed : ", t, datetime.now(), 'MAP', str(current_score))
             if any(losses[e]):
                 print("mean logloss : ", sum(losses[e])/len(losses[e]))
+
+            
+
 
 ##############################################################################
 # start testing, and build Kaggle's submission file ##########################
