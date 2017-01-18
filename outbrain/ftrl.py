@@ -230,7 +230,8 @@ def data(path, D):
             del row['clicked']
 
         x = []
-        del row['']
+        if '' in row:
+            del row['']
         del row['display_id']
         for key in row:
             x.append(abs(hash(key + '_' + row[key])) % D)
@@ -247,6 +248,16 @@ def data(path, D):
         row = doc_meta_dict[str(ad_doc_id)]
         for v, k in row.items():
             x.append(abs(hash(v + '_' + k)) % D)
+
+
+        if str(ad_doc_id) in doc_topics_dict:
+            for topic in doc_topics_dict[str(ad_doc_id)]:
+                x.append(abs(hash('topic_' + topic)) % D)
+
+
+        if str(ad_doc_id) in doc_cats_dict:
+            for category in doc_cats_dict[str(ad_doc_id)]:
+                x.append(abs(hash('category_' + category)) % D)
 
         row = event_dict.get(disp_id, [])
         ## build x
@@ -353,7 +364,6 @@ with open(data_path + "documents_meta.csv") as infile:
     doc_meta_dict = {}
 
     for ind, row in enumerate(doc_meta):
-
         doc_meta_dict[row['document_id']] = {'source_id' :row['source_id']}
         if 'publisher_id' in row:
             doc_meta_dict[row['document_id']]['published_id'] = row['publisher_id']
@@ -362,6 +372,40 @@ with open(data_path + "documents_meta.csv") as infile:
             print("documents meta : ", ind)
     print(len(doc_meta_dict))
 
+print("documents topics")
+with open(data_path + "documents_topics.csv") as infile:
+    doc_topics = csv.DictReader(infile)
+    next(doc_topics)
+    doc_topics_dict = {}
+
+    for ind, row in enumerate(doc_topics):
+        if float(row['confidence_level']) > 0.5:
+            if row['document_id'] in doc_topics_dict:
+                doc_topics_dict[row['document_id']].append(row['topic_id'])
+            else:
+                doc_topics_dict[row['document_id']] = [row['topic_id']]
+
+        if ind % 1000000 == 0:
+            print("documents topics : ", ind)
+    print(len(doc_topics_dict))
+
+
+print("documents categories")
+with open(data_path + "documents_categories.csv") as infile:
+    doc_cats = csv.DictReader(infile)
+    next(doc_cats)
+    doc_cats_dict = {}
+
+    for ind, row in enumerate(doc_cats):
+        if float(row['confidence_level']) > 0.5:
+            if row['document_id'] in doc_cats_dict:
+                doc_cats_dict[row['document_id']].append(row['category_id'])
+            else:
+                doc_cats_dict[row['document_id']] = [row['category_id']]
+
+        if ind % 1000000 == 0:
+            print("documents categories : ", ind)
+    print(len(doc_cats_dict))
 
 
 
